@@ -8,18 +8,14 @@
 # LOAD THE PACKAGES ******************************************************** ####
 start.time = Sys.time()
 # PACKAGE LOADS ************************************************************ ####
-suppressMessages(pacman::p_load("DEoptim", "random", "ROI", "pso","GenSA","ROI.plugin.glpk", 
-                                "ROI.plugin.quadprog","ROI.plugin.symphony","foreach","iterators",
-                                "fGarch","Rglpk","quadprog","corpcor","testthat","nloptr","MASS",
-                                "robustbase","PerformanceAnalytics","quantmod","highfrequency",
-                                "LSMRealOptions","RQuantLib","Jdmbs","fOptions","LaplacesDemon",
-                                "edgar","PortfolioAnalytics","reticulate","LSMonteCarlo","anytime",
-                                "LSMonteCarlo","BatchGetSymbols","fPortfolio","pbapply","lubridate",
-                                "HARModel","chron","TTR","future","dplyr","IBrokers","alphavantager",          
-                                "tidyquant","httr","purrr","rvest","quantstrat","tseries",
-                                "FinancialInstrument","devtools","urca","derivmkts","dplyr","tidyr",
-                                "data.table","jsonlite","stringr","Rcpp","padr","cronR","shiny",
-                                "miniUI","shinyFiles","BLModel","BLCOP","portfolioBacktest","corrplot")) 
+suppressMessages(pacman::p_load("PerformanceAnalytics","quantmod",
+                                "LSMRealOptions","RQuantLib","fOptions",
+                                "PortfolioAnalytics","reticulate","LSMonteCarlo",
+                                "anytime","pbapply","lubridate",
+                                "TTR","dplyr","IBrokers","alphavantager",          
+                                "tidyquant","httr","purrr","rvest",
+                                "devtools","urca","derivmkts","tidyr",
+                                "data.table","jsonlite","stringr","xml2","tibble"))
 # DATE AND TIME FORMATTING ************************************************* ####
 start_time <- Sys.time()
 first.date <- Sys.Date()-(365*1)
@@ -150,7 +146,7 @@ Pull.Options = function(symbol,EXERCISE){
   opts
 }
 # PULL THE INDEX/ASSETS' OPTIONS ******************************************* ####
-SYMBOL = "_SPX" #"_SPX", "_RUT"
+SYMBOL = "_SPX" #"_SPX", "SPY", "TSLA"
 ASSIGNMENT = "european" # "european" or "american"
 INDEX_OPTS <- suppressWarnings(Pull.Options(SYMBOL,ASSIGNMENT))
 # START THE FILTRATION SYSTEM ********************************************** ####
@@ -253,7 +249,7 @@ INDEX_OPTS_NEXT_TERM       <- rbind(INDEX_OPTS_NEXT_TERM_UP,INDEX_OPTS_NEXT_TERM
 rm(INDEX_OPTS_NEXT_TERM_DOWN,INDEX_OPTS_NEXT_TERM_UP)
 INDEX_OPTS_NEXT_TERM       <- INDEX_OPTS_NEXT_TERM[order(INDEX_OPTS_NEXT_TERM$strike),]
 # CALCULATE THE FORWARD PRICES FOR NEAR AND NEXT TERM OPTIONS ************** ####
-require("xml2");require("dplyr");require("pbapply");require("quantmod")
+# require("xml2");require("dplyr");require("pbapply");require("quantmod")
 start.start = Sys.time()
 # https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yield
 # READ DAILY RATES
@@ -349,7 +345,14 @@ OPTS_NEXT_TERM_PUTS   <- INDEX_OPTS[as.numeric(INDEX_OPTS$days2Exp) %in% FW_NEAR
 OPTS_NEAR_TERM <- rbind(OPTS_NEAR_TERM_CALLS,OPTS_NEAR_TERM_PUTS) %>% data.frame()
 OPTS_NEXT_TERM <- rbind(OPTS_NEXT_TERM_CALLS,OPTS_NEXT_TERM_PUTS) %>% data.frame()
 # Clean Up
-rm(OPTS_NEAR_TERM_CALLS,OPTS_NEAR_TERM_PUTS,OPTS_NEXT_TERM_CALLS,OPTS_NEXT_TERM_PUTS)
+rm(OPTS_NEAR_TERM_CALLS,
+   OPTS_NEAR_TERM_PUTS,
+   OPTS_NEXT_TERM_CALLS,
+   OPTS_NEXT_TERM_PUTS,
+   SPLINE.NEAR,
+   SPLINE.NEXT,
+   spl,
+   RATES)
 # Calculate the Put and Call Mid Price Average
 K_NEAR_OPT     <- INDEX_OPTS[INDEX_OPTS$strike == K_NEAR
                              & as.numeric(INDEX_OPTS$days2Exp) == as.numeric(FW_NEAR_OPT$days2Exp),]
@@ -363,16 +366,16 @@ K_NEXT_OPT_BID     <- mean(as.numeric(K_NEXT_OPT[,c("strike","flag","bid")]$bid)
 OPTS_NEAR_TERM <-  OPTS_NEAR_TERM %>% select(strike,flag,Mid,bid)
 OPTS_NEXT_TERM <-  OPTS_NEXT_TERM %>% select(strike,flag,Mid,bid)
 # Add in the Call/Put Mid Average row
-    # Near
-    tmp_row        <- data.frame(as.numeric(K_NEAR_OPT$strike[1]),"Put/Call_Average",K_NEAR_OPT_AVE,K_NEAR_OPT_BID)
-    colnames(tmp_row) <- colnames(OPTS_NEAR_TERM)
-    OPTS_NEAR_TERM <- rbind(tmp_row,OPTS_NEAR_TERM)
-    OPTS_NEAR_TERM <- OPTS_NEAR_TERM[order(OPTS_NEAR_TERM$strike),]
-    # Next
-    tmp_row        <- data.frame(as.numeric(K_NEXT_OPT$strike[1]),"Put/Call_Average",K_NEXT_OPT_AVE,K_NEXT_OPT_BID)
-    colnames(tmp_row) <- colnames(OPTS_NEXT_TERM)
-    OPTS_NEXT_TERM <- rbind(tmp_row,OPTS_NEXT_TERM)
-    OPTS_NEXT_TERM <- OPTS_NEXT_TERM[order(OPTS_NEXT_TERM$strike),]
+# Near
+tmp_row        <- data.frame(as.numeric(K_NEAR_OPT$strike[1]),"Put/Call_Average",K_NEAR_OPT_AVE,K_NEAR_OPT_BID)
+colnames(tmp_row) <- colnames(OPTS_NEAR_TERM)
+OPTS_NEAR_TERM <- rbind(tmp_row,OPTS_NEAR_TERM)
+OPTS_NEAR_TERM <- OPTS_NEAR_TERM[order(OPTS_NEAR_TERM$strike),]
+# Next
+tmp_row        <- data.frame(as.numeric(K_NEXT_OPT$strike[1]),"Put/Call_Average",K_NEXT_OPT_AVE,K_NEXT_OPT_BID)
+colnames(tmp_row) <- colnames(OPTS_NEXT_TERM)
+OPTS_NEXT_TERM <- rbind(tmp_row,OPTS_NEXT_TERM)
+OPTS_NEXT_TERM <- OPTS_NEXT_TERM[order(OPTS_NEXT_TERM$strike),]
 # Quick Refresh of the Work-space if needed
 rm(tmp_row,K_NEAR_OPT,K_NEAR_OPT_AVE,K_NEXT_OPT,K_NEXT_OPT_AVE)
 # rm(list=setdiff(ls(), "INDEX_OPTS"))
@@ -444,11 +447,11 @@ if (SYMBOL == "^GSPC"){
 }
 # Test the option chain
 check_opts_near <- subset(INDEX_OPTS,INDEX_OPTS$flag == "C"
-                        & as.numeric(INDEX_OPTS$strike) == K_NEAR
-                        & as.numeric(INDEX_OPTS$days2Exp) == t.near)
+                          & as.numeric(INDEX_OPTS$strike) == K_NEAR
+                          & as.numeric(INDEX_OPTS$days2Exp) == t.near)
 check_opts_next <- subset(INDEX_OPTS,INDEX_OPTS$flag == "C"
-                        & as.numeric(INDEX_OPTS$strike) == K_NEXT
-                        & as.numeric(INDEX_OPTS$days2Exp) == t.next)
+                          & as.numeric(INDEX_OPTS$strike) == K_NEXT
+                          & as.numeric(INDEX_OPTS$days2Exp) == t.next)
 
 if (ASSIGNMENT == "european"){
   check_iv_near   <- EuropeanOptionImpliedVolatility(
@@ -495,21 +498,7 @@ if (ASSIGNMENT == "european"){
   print(paste0("The American Implied Volatility for ATMF Next Term Options is"," ",round(check_iv_next,3)," % ."))
   print(paste0("The weighted average of ATMF IV for the Underlying"," ",round(IV_SPOT,3)," % ."))
 }
-# div <- suppressWarnings(getDividends("TXN")) %>% as.xts()
-# div_am <- gsub("-.*","",(as.character(time(div[1:nrow(div),])))); div_am[1]
-# div[nrow(div)-]
 # Finish
 end.time = Sys.time()
 Finish_Line = end.time - start.time; Finish_Line
-
-
-
-
 ##############
-
-
-
-
-
-
-
